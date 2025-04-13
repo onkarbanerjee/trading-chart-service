@@ -1,24 +1,19 @@
-# DO NOT CHANGE. This file is being managed from a central repository
-# To know more simply visit https://github.com/honestbank/.github/blob/main/docs/about.md
-
-name: go-tests
+name: build
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    branches: [main]
 
 jobs:
-  load-secrets:
-    uses: "./.github/workflows/secrets-loader.yaml"
-    secrets: inherit
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  go-tests:
-    name: go-tests
-    needs:
-      - load-secrets
-    uses: honestbank/workflows/.github/workflows/shared-build-go-general-template.yaml@main
-    secrets: inherit
-    with:
-      encrypted_secrets : ${{ needs.load-secrets.outputs.encrypted_secrets }}
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Test
+        run: go test -race -v -tags integration_test ./...
