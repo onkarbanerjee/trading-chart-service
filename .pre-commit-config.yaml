@@ -1,0 +1,60 @@
+# DO NOT CHANGE. This file is being managed from a central repository
+# To know more simply visit https://github.com/honestbank/.github/blob/main/docs/about.md
+
+default_install_hook_types: [ pre-commit, commit-msg ]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+      - id: trailing-whitespace
+        stages: [pre-commit]
+      - id: check-yaml
+        stages: [pre-commit]
+        args: ["--allow-multiple-documents"]
+      - id: detect-aws-credentials
+        stages: [pre-commit]
+        args: ["--allow-missing-credentials"]
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.64.4
+    hooks:
+      - id: golangci-lint
+        stages: [pre-commit]
+        args: ["--timeout=10m"]
+  - repo: https://github.com/TekWizely/pre-commit-golang
+    rev: v1.0.0-rc.1
+    hooks:
+      - id: go-imports
+        stages: [pre-commit]
+  - repo: https://github.com/gitguardian/ggshield
+    rev: v1.36.0
+    hooks:
+      - id: ggshield
+        language: python
+        stages: [pre-commit]
+        args: ["secret", "scan", "pre-commit"]
+  - repo: local
+    hooks:
+      - id: generate-secrets-loader
+        name: generate-secrets-loader
+        entry: ./secrets-loader.generator.sh
+        language: script
+        stages: [pre-commit]
+      - id: generate-catalog
+        name: generate-catalog
+        entry: ./catalog-info.generator.sh
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: commit-msg-spell-check
+        name: commit-msg-spell-check
+        entry: ./spell-check.sh
+        language: script
+        stages: ["commit-msg"]
+      - id: append-ticket-id
+        name: Append Ticket ID to Commit Message
+        entry: ./append-ticket-id.sh
+        language: script
+        stages: [ commit-msg ]

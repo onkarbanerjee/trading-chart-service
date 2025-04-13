@@ -1,0 +1,55 @@
+{
+    "run": {
+        "tests": true
+    },
+    "issues":  {
+        "exclude-rules": [
+            {
+                "path": "_test.go",
+                "linters": ["errcheck"]
+            }
+
+        ],
+        "exclude-files": [
+            "graph"
+        ],
+        "exclude-dirs": [
+            ".*/generated/*"
+        ],
+        "exclude-dirs-use-default": true
+    },
+    "linters": {
+        "enable": [
+            "asciicheck",
+            "copyloopvar",
+            "errcheck",
+            "exhaustive",
+            "forbidigo",
+            "gocyclo",
+            "gofmt",
+            "goimports",
+            "gosimple",
+            "govet",
+            "ineffassign",
+            "makezero",
+            "misspell",
+            "nakedret",
+            "nestif",
+            "nilerr",
+            "nlreturn",
+            "nolintlint",
+            "staticcheck",
+            "testpackage",
+            "typecheck",
+            "unconvert",
+            "unused",
+            "wastedassign",
+            "whitespace"
+        ]
+    },
+    "linters-settings": {
+        "errcheck": {
+            "check-blank": true
+        }
+    }
+}

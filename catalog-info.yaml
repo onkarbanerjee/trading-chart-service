@@ -1,0 +1,36 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: template-repository-go
+  description: The template-repository-go template
+  annotations:
+    github.com/project-slug: honestbank/template-repository-go
+    github.com/team-slug: honestbank/backend-engineers
+    sonarqube.org/project-key: honestbank_template-repository-go
+  tags:
+    - idempotent:false
+    - language:golang
+    - stateless:false
+  links:
+    - title: Dashboard
+      url: https://grafana.com
+      icon: dashboard
+    - title: Design Document
+      url: https://notion.com
+      icon: menubook
+    - title: Runbook
+      url: https://notion.com
+      icon: help
+spec:
+  type: template
+  lifecycle: production
+  owner: group:mlops-squad
+  dependsOn:
+    - component:graphql-lib
+    - component:graphql-reverse-proxy
+    - component:graphql-sdk
+    - component:honest-lib-go-hbconfig
+    - component:honest-lib-go-log
+    - component:honest-lib-go-metric
+    - component:honest-lib-go-tracing
