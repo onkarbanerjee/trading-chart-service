@@ -3,7 +3,7 @@ prepare:
 	pre-commit install
 
 generate:
-	echo "Not implemented"
+	go mod tidy
 
 migrate:
 	echo "Not implemented"
@@ -21,3 +21,6 @@ integration_test:
 
 test_and_coverage:
 	go test -race -covermode=atomic ./...
+
+grpc:
+	protoc --go_out=. --go-grpc_out=. proto/candle.proto

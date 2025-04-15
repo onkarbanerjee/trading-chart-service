@@ -15,5 +15,8 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: generate
+        run: make generate
+
       - name: Test
-        run: go test -race -v -tags integration_test ./...
+        run: go integration_test -race -v -tags integration_test ./...
