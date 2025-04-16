@@ -2,7 +2,9 @@ prepare:
 	curl -s -o /dev/null https://pre-commit.com/install-local.py
 	pre-commit install
 
-generate:
+generate: grpc
+	rm -rf mocks/
+	go generate tools.go
 	go mod tidy
 
 migrate:
@@ -23,4 +25,5 @@ test_and_coverage:
 	go test -race -covermode=atomic ./...
 
 grpc:
-	protoc --go_out=. --go-grpc_out=. proto/candle.proto
+	rm -rf generated && mkdir -p generated
+	protoc --go_out=generated --go_opt=paths=source_relative --go-grpc_out=generated --go-grpc_opt=paths=source_relative proto/candle.proto

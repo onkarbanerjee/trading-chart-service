@@ -1,29 +1,30 @@
-package main
+package aggregator
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"os"
 	"os/signal"
-	"strings"
+	"sync"
 	"syscall"
 	"time"
 
-	"github.com/honestbank/template-repository-go/internal/aggregator"
-
-	"github.com/honestbank/template-repository-go/entities"
-
-	"go.uber.org/zap"
-
 	"github.com/gorilla/websocket"
+	"github.com/onkarbanerjee/trading-chart-service/entities"
+	"github.com/onkarbanerjee/trading-chart-service/generated/proto"
+	"github.com/onkarbanerjee/trading-chart-service/internal/aggregator"
+	broadcast "github.com/onkarbanerjee/trading-chart-service/internal/grpc"
+	"github.com/onkarbanerjee/trading-chart-service/internal/receiver"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
-func connectToBinance(symbols []string) (*websocket.Conn, error) {
-	// Build stream path like btcusdt@aggTrade/ethusdt@aggTrade
-	streams := strings.Join(symbols, "@aggTrade/") + "@aggTrade"
-	wsURL := fmt.Sprintf("wss://stream.binance.com:9443/stream?streams=%s", streams)
+func connectToBinance(symbol string) (*websocket.Conn, error) {
+	streams := symbol + "@aggTrade"
+	wsURL := fmt.Sprintf("wss://stream.binance.com:9443/ws/%s", streams)
 
 	u, err := url.Parse(wsURL)
 	if err != nil {
@@ -39,56 +40,61 @@ func connectToBinance(symbols []string) (*websocket.Conn, error) {
 }
 
 func main() {
+	Start()
+}
 
-	symbols := []string{"btcusdt", "ethusdt", "pepeusdt"}
-	conn, err := connectToBinance(symbols)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-
-	// Graceful shutdown
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-
+func Start() {
 	logger, err := zap.NewProduction()
 	if err != nil {
-		log.Fatalf("can't initialize zap logger: %v", err)
+		log.Fatalf("failed to initialize zap logger: %v", err)
 	}
 
-	ohlcAggregator := aggregator.NewOHLCAggregator(20*time.Second, func(c entities.Candle) {
-		logger.Info(fmt.Sprintf("candle: %+v", c))
-	})
-	logger.Info("Listening for trades...")
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
 
-	for {
-		select {
-		case <-interrupt:
-			logger.Info("interrupt received. Exiting.")
-			conn.Close()
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	candles := make(chan *entities.Candle)
+	stop := startGRPCBroadcastingServer(broadcast.NewServer(candles), lis)
+	symbols := []string{"btcusdt", "ethusdt", "pepeusdt"}
+	for _, symbol := range symbols {
+		conn, err := connectToBinance(symbol)
+		if err != nil {
+			logger.Error("could not get a connection to binance, will check for next symbol", zap.String("symbol", symbol), zap.Error(err))
 
-			break
-		default:
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				logger.Error("error reading message:", zap.Error(err))
-
-				continue
-			}
-
-			var tick entities.Tick
-
-			if err := json.Unmarshal(msg, &tick); err != nil {
-				logger.Error("error unmarshalling message", zap.Error(err))
-
-				continue
-			}
-
-			//logger.Info("received message", zap.Any("message", tick.Data))
-			err = ohlcAggregator.Aggregate(&tick)
-			if err != nil {
-				logger.Error("aggregator error", zap.Error(err))
-			}
+			continue
 		}
+		ticks := make(chan *entities.AggTradeMessage)
+		wg.Add(1)
+		go aggregator.NewOHLCAggregator(ctx, wg, 30*time.Second, ticks, candles, logger.With(zap.String("symbol", symbol))).Aggregate()
+		wg.Add(1)
+		go receiver.NewTicksReceiver(ctx, wg, conn, ticks, logger.With(zap.String("symbol", symbol))).Start()
 	}
+
+	<-interrupt
+	logger.Info("interrupt received")
+	cancel()
+	logger.Info("all contexts cancelled")
+	wg.Wait()
+	logger.Info("all goroutines finished")
+	stop()
+	logger.Info("stopped the grpc server")
+}
+
+func startGRPCBroadcastingServer(s proto.CandlesServer, lis net.Listener) func() {
+	grpcServer := grpc.NewServer()
+	proto.RegisterCandlesServer(grpcServer, s)
+
+	log.Println("🚀 gRPC server listening on :50051")
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+
+	return grpcServer.GracefulStop
 }

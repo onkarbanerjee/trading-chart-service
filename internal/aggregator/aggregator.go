@@ -1,72 +1,90 @@
 package aggregator
 
 import (
-	"fmt"
+	"context"
+	"log"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/honestbank/template-repository-go/entities"
+	"go.uber.org/zap"
+
+	"github.com/onkarbanerjee/trading-chart-service/entities"
 )
 
 type Aggregator interface {
-	Aggregate(tick *entities.Tick) error
+	Aggregate()
 }
 
 type OHLCAggregator struct {
-	mu       *sync.RWMutex
-	candles  map[string]*entities.Candle
-	interval time.Duration
-	OnClose  func(candle entities.Candle) // Called when a candle closes
+	ctx           context.Context
+	wg            *sync.WaitGroup
+	currentCandle *entities.Candle
+	interval      time.Duration
+	ticks         <-chan *entities.AggTradeMessage
+	candles       chan<- *entities.Candle
+	logger        *zap.Logger
 }
 
-func NewOHLCAggregator(interval time.Duration, onClose func(candle entities.Candle)) *OHLCAggregator {
+func NewOHLCAggregator(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, ticks <-chan *entities.AggTradeMessage, candlesChan chan<- *entities.Candle, logger *zap.Logger) *OHLCAggregator {
 	return &OHLCAggregator{
-		mu:       &sync.RWMutex{},
-		candles:  make(map[string]*entities.Candle),
+		ctx:      ctx,
+		wg:       wg,
 		interval: interval,
-		OnClose:  onClose,
+		ticks:    ticks,
+		candles:  candlesChan,
+		logger:   logger,
 	}
 }
 
-func (o *OHLCAggregator) Aggregate(tick *entities.Tick) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
+func (o *OHLCAggregator) Aggregate() {
+	defer o.wg.Done()
 
-	bucketTime := time.UnixMilli(tick.Data.Time).Truncate(o.interval)
-	key := tick.Data.Symbol
-	price, errParsingPrice := strconv.ParseFloat(tick.Data.Price, 64)
-	if errParsingPrice != nil {
-		return fmt.Errorf("could not parse the price, got error: %s", errParsingPrice.Error())
-	}
+	for {
+		select {
+		case <-o.ctx.Done():
+			o.logger.Info("aggregator received shutdown signal")
 
-	c, exists := o.candles[key]
-	if !exists || !c.Timestamp.Equal(bucketTime) {
-		if exists {
-			o.OnClose(*c)
+			// Emit the last candle before exiting (if any)
+			if o.currentCandle != nil {
+				o.candles <- o.currentCandle
+			}
+
+			return
+
+		case tick := <-o.ticks:
+			bucketTime := time.UnixMilli(tick.Time).Truncate(o.interval)
+			log.Println("received tick", zap.Any("tick", tick), zap.Any("bucketTime", bucketTime))
+			price, errParsingPrice := strconv.ParseFloat(tick.Price, 64)
+			if errParsingPrice != nil {
+				o.logger.Error("error parsing price", zap.Error(errParsingPrice))
+
+				continue
+			}
+
+			if o.currentCandle == nil || !o.currentCandle.Timestamp.Equal(bucketTime) {
+				o.currentCandle = &entities.Candle{
+					Symbol:    tick.Symbol,
+					Timestamp: bucketTime,
+					Open:      price,
+					High:      price,
+					Low:       price,
+					Close:     price,
+				}
+				o.candles <- o.currentCandle
+
+				continue
+			}
+
+			// Update current candle
+			o.currentCandle.Close = price
+			if price > o.currentCandle.High {
+				o.currentCandle.High = price
+			}
+			if price < o.currentCandle.Low {
+				o.currentCandle.Low = price
+			}
+			o.candles <- o.currentCandle
 		}
-
-		// Create a new candle for this bucket
-		o.candles[key] = &entities.Candle{
-			Symbol:    tick.Data.Symbol,
-			Timestamp: bucketTime,
-			Open:      price,
-			High:      price,
-			Low:       price,
-			Close:     price,
-		}
-
-		return nil
 	}
-
-	// Update current candle
-	c.Close = price
-	if price > c.High {
-		c.High = price
-	}
-	if price < c.Low {
-		c.Low = price
-	}
-
-	return nil
 }

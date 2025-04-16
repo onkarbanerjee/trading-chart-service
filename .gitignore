@@ -247,7 +247,7 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Unit integration_test / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -359,7 +359,7 @@ token.json
 *.dll
 *.dylib
 
-# Test binary, built with `go test -c`
+# Test binary, built with `go integration_test -c`
 *.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
@@ -453,7 +453,7 @@ mocks
 .ssh
 
 
-# test log file
+# integration_test log file
 coverage.txt
 coverage.tmp
 

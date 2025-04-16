@@ -45,7 +45,7 @@ This will start:
 
 ### 3. Run Tests
 ```bash
-go test ./internal/candle
+go integration_test ./internal/aggregator
 ```
 
 ### 📦 Kubernetes Deployment

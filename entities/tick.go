@@ -2,17 +2,17 @@ package entities
 
 import "time"
 
-type aggTradeMessage struct {
+type AggTradeMessage struct {
 	Symbol   string `json:"s"`
 	Price    string `json:"p"`
 	Quantity string `json:"q"`
 	Time     int64  `json:"T"`
 }
 
-type Tick struct {
-	Stream string          `json:"stream"`
-	Data   aggTradeMessage `json:"data"`
-}
+//type Tick struct {
+//	Stream string          `json:"stream"`
+//	Data   aggTradeMessage `json:"data"`
+//}
 
 type Candle struct {
 	Symbol    string
